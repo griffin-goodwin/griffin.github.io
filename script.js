@@ -803,11 +803,11 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
             <div class="spaceweather-card">
                 <h3>SXR Flux Overview</h3>
                 <div class="spaceweather-info">
-                    <img src="https://services.swpc.noaa.gov/images/swx-overview-small.gif" alt="Space Weather X-Ray Overview" class="sxr-overview-image" 
-                         onclick="openSXRModal(this.src)"
-                         style="cursor: pointer;"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                    <p style="display:none; font-size:0.875rem; color:#888;">Image unavailable</p>
+                    <img id="sxr-overview-img" src="" alt="Space Weather X-Ray Overview" class="sxr-overview-image" 
+                         onclick="openSXRModal(this.src || 'https://services.swpc.noaa.gov/images/swx-overview-small.gif')"
+                         style="cursor: pointer; display: none;">
+                    <div class="sxr-image-loading" style="text-align: center; padding: 2rem; color: #888;">Loading image...</div>
+                    <p class="sxr-image-error" style="display:none; font-size:0.875rem; color:#888; text-align: center; padding: 1rem;">Image unavailable. <a href="https://services.swpc.noaa.gov/images/swx-overview-small.gif" target="_blank" style="color: #3498db;">View directly</a></p>
                 </div>
             </div>
             
@@ -863,6 +863,62 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
         observer.observe(card);
     });
     
+    // Load SXR overview image with CORS proxy fallback
+    loadSXRImage();
+}
+
+// Load SXR overview image with fallback
+async function loadSXRImage() {
+    const img = document.getElementById('sxr-overview-img');
+    const loadingDiv = document.querySelector('.sxr-image-loading');
+    const errorDiv = document.querySelector('.sxr-image-error');
+    
+    if (!img) return;
+    
+    const imageUrl = 'https://services.swpc.noaa.gov/images/swx-overview-small.gif';
+    
+    // Try loading directly first
+    img.onload = function() {
+        img.style.display = 'block';
+        if (loadingDiv) loadingDiv.style.display = 'none';
+    };
+    
+    img.onerror = function() {
+        // If direct load fails, try using a proxy
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(imageUrl);
+        const proxyImg = new Image();
+        
+        proxyImg.onload = function() {
+            img.src = proxyUrl;
+            img.style.display = 'block';
+            if (loadingDiv) loadingDiv.style.display = 'none';
+        };
+        
+        proxyImg.onerror = function() {
+            // Try another proxy
+            const proxyUrl2 = 'https://corsproxy.io/?' + encodeURIComponent(imageUrl);
+            const proxyImg2 = new Image();
+            
+            proxyImg2.onload = function() {
+                img.src = proxyUrl2;
+                img.style.display = 'block';
+                if (loadingDiv) loadingDiv.style.display = 'none';
+            };
+            
+            proxyImg2.onerror = function() {
+                // All attempts failed
+                if (loadingDiv) loadingDiv.style.display = 'none';
+                if (errorDiv) errorDiv.style.display = 'block';
+            };
+            
+            proxyImg2.src = proxyUrl2;
+        };
+        
+        proxyImg.src = proxyUrl;
+    };
+    
+    // Start loading
+    img.src = imageUrl;
 }
 
 // Auto-refresh space weather data every 5 minutes
