@@ -178,34 +178,69 @@ const paperFiles = [
     'Papers/Goodwin_2025_ApJ_981_200.pdf'
 ];
 
+function parsePaperFromFilename(pdfPath) {
+    const filename = pdfPath.split('/').pop().replace('.pdf', '');
+    let title = '';
+    let publicationInfo = '';
+    let arxivId = '';
+    
+    // Check for arXiv ID pattern (e.g., 2505.10390v1)
+    if (/^\d{4}\.\d{5}/.test(filename)) {
+        arxivId = filename.match(/^(\d{4}\.\d{5})/)[1];
+        publicationInfo = `arXiv:${arxivId}`;
+        title = `Research Paper - arXiv:${arxivId}`;
+    }
+    // Check for publication pattern (e.g., Goodwin_2024_ApJ_964_163)
+    else if (/Goodwin_\d{4}_/.test(filename)) {
+        const match = filename.match(/Goodwin_(\d{4})_(\w+)_(\d+)_(\d+)/);
+        if (match) {
+            const [, year, journal, volume, page] = match;
+            publicationInfo = `${journal} ${year}, ${volume}, ${page}`;
+            // Create a more descriptive title
+            if (journal === 'ApJ') {
+                title = `Published in The Astrophysical Journal (${year})`;
+            } else {
+                title = `Published in ${journal} (${year})`;
+            }
+        } else {
+            title = filename.replace(/_/g, ' ');
+        }
+    } else {
+        title = filename.replace(/_/g, ' ');
+        publicationInfo = filename;
+    }
+    
+    return {
+        title: title,
+        authors: 'Griffin Goodwin',
+        publicationInfo: publicationInfo || filename,
+        arxivId: arxivId,
+        filename: filename,
+        path: pdfPath
+    };
+}
+
 async function extractPaperMetadata(pdfPath) {
+    // First, get basic info from filename (always works)
+    const basicInfo = parsePaperFromFilename(pdfPath);
+    
+    // Try to enhance with PDF.js if available
+    if (typeof pdfjsLib === 'undefined') {
+        return basicInfo;
+    }
+    
     try {
-        const loadingTask = pdfjsLib.getDocument(pdfPath);
+        const loadingTask = pdfjsLib.getDocument({
+            url: pdfPath,
+            httpHeaders: {},
+            withCredentials: false
+        });
         const pdf = await loadingTask.promise;
         const metadata = await pdf.getMetadata();
         
         // Try to get title from metadata
         let title = metadata.info?.Title || '';
         let authors = metadata.info?.Author || '';
-        
-        // Parse filename for additional info
-        const filename = pdfPath.split('/').pop().replace('.pdf', '');
-        let publicationInfo = '';
-        let arxivId = '';
-        
-        // Check for arXiv ID pattern (e.g., 2505.10390v1)
-        if (/^\d{4}\.\d{5}/.test(filename)) {
-            arxivId = filename.match(/^(\d{4}\.\d{5})/)[1];
-            publicationInfo = `arXiv:${arxivId}`;
-        }
-        // Check for publication pattern (e.g., Goodwin_2024_ApJ_964_163)
-        else if (/Goodwin_\d{4}_/.test(filename)) {
-            const match = filename.match(/Goodwin_(\d{4})_(\w+)_(\d+)_(\d+)/);
-            if (match) {
-                const [, year, journal, volume, page] = match;
-                publicationInfo = `${journal} ${year}, ${volume}, ${page}`;
-            }
-        }
         
         // If no title from metadata, try to extract from first page
         if (!title) {
@@ -223,49 +258,48 @@ async function extractPaperMetadata(pdfPath) {
         }
         
         return {
-            title: title || filename.replace(/_/g, ' '),
-            authors: authors || 'Griffin Goodwin',
-            publicationInfo: publicationInfo || filename,
-            arxivId: arxivId,
-            filename: filename,
+            title: title || basicInfo.title,
+            authors: authors || basicInfo.authors,
+            publicationInfo: basicInfo.publicationInfo,
+            arxivId: basicInfo.arxivId,
+            filename: basicInfo.filename,
             path: pdfPath
         };
     } catch (error) {
-        console.error(`Error extracting metadata from ${pdfPath}:`, error);
-        // Fallback to filename parsing
-        const filename = pdfPath.split('/').pop().replace('.pdf', '');
-        let publicationInfo = '';
-        let arxivId = '';
-        
-        if (/^\d{4}\.\d{5}/.test(filename)) {
-            arxivId = filename.match(/^(\d{4}\.\d{5})/)[1];
-            publicationInfo = `arXiv:${arxivId}`;
-        } else if (/Goodwin_\d{4}_/.test(filename)) {
-            const match = filename.match(/Goodwin_(\d{4})_(\w+)_(\d+)_(\d+)/);
-            if (match) {
-                const [, year, journal, volume, page] = match;
-                publicationInfo = `${journal} ${year}, ${volume}, ${page}`;
-            }
-        }
-        
-        return {
-            title: filename.replace(/_/g, ' '),
-            authors: 'Griffin Goodwin',
-            publicationInfo: publicationInfo || filename,
-            arxivId: arxivId,
-            filename: filename,
-            path: pdfPath
-        };
+        console.warn(`Could not extract metadata from ${pdfPath}, using filename parsing:`, error);
+        // Return basic info from filename parsing
+        return basicInfo;
     }
 }
 
 async function loadPapers() {
     const papersGrid = document.getElementById('papers-grid');
     
+    if (!papersGrid) {
+        console.error('Papers grid element not found');
+        return;
+    }
+    
+    // Show loading state
+    papersGrid.innerHTML = '<p>Loading papers...</p>';
+    
     try {
-        const papers = await Promise.all(
-            paperFiles.map(file => extractPaperMetadata(file))
+        // Load papers with timeout to prevent hanging
+        const loadPromises = paperFiles.map(file => 
+            Promise.race([
+                extractPaperMetadata(file),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+            ]).catch(() => parsePaperFromFilename(file))
         );
+        
+        const papers = await Promise.all(loadPromises);
+        
+        if (papers.length === 0) {
+            papersGrid.innerHTML = '<p>No papers found.</p>';
+            return;
+        }
         
         papersGrid.innerHTML = papers.map(paper => `
             <div class="paper-card">
@@ -289,13 +323,34 @@ async function loadPapers() {
         });
     } catch (error) {
         console.error('Error loading papers:', error);
-        papersGrid.innerHTML = '<p>Unable to load papers. Please try again later.</p>';
+        // Fallback: show papers using filename parsing only
+        const papers = paperFiles.map(file => parsePaperFromFilename(file));
+        papersGrid.innerHTML = papers.map(paper => `
+            <div class="paper-card">
+                <h3>${paper.title}</h3>
+                <p class="paper-authors">${paper.authors}</p>
+                <p class="paper-publication">${paper.publicationInfo}</p>
+                <div class="paper-links">
+                    <a href="${paper.path}" class="paper-link" target="_blank">View PDF</a>
+                    <a href="${paper.path}" class="paper-link" download>Download</a>
+                </div>
+            </div>
+        `).join('');
+        
+        // Apply animations
+        const paperCards = papersGrid.querySelectorAll('.paper-card');
+        paperCards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            card.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
+            observer.observe(card);
+        });
     }
 }
 
 // Observe project cards for animation
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize PDF.js worker
+    // Initialize PDF.js worker if available
     if (typeof pdfjsLib !== 'undefined') {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
@@ -303,21 +358,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load GitHub repos immediately
     fetchGitHubRepos();
     
-    // Wait for PDF.js to be fully loaded before loading papers
-    if (typeof pdfjsLib !== 'undefined') {
-        loadPapers();
-    } else {
-        // Retry after a short delay if PDF.js isn't loaded yet
-        setTimeout(() => {
-            if (typeof pdfjsLib !== 'undefined') {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                loadPapers();
-            } else {
-                console.error('PDF.js library not loaded');
-                document.getElementById('papers-grid').innerHTML = '<p>Unable to load PDF library. Please refresh the page.</p>';
-            }
-        }, 500);
-    }
+    // Load papers - will work even if PDF.js fails
+    // Papers will always show using filename parsing as fallback
+    loadPapers();
     
     // Observe existing project cards (if any)
     const projectCards = document.querySelectorAll('.project-card');
