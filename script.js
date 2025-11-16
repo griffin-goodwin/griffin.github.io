@@ -221,14 +221,21 @@ function parsePaperFromFilename(pdfPath) {
 }
 
 async function extractPaperMetadata(pdfPath) {
-    // First, get basic info from filename (always works)
+    // For GitHub Pages, PDF.js often fails due to CORS restrictions
+    // So we'll primarily use filename parsing which always works
     const basicInfo = parsePaperFromFilename(pdfPath);
     
-    // Try to enhance with PDF.js if available
-    if (typeof pdfjsLib === 'undefined') {
+    // Only try PDF.js if we're not on GitHub Pages (localhost or local file)
+    // Check if we're on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io') || 
+                          window.location.hostname.includes('github.com');
+    
+    if (isGitHubPages || typeof pdfjsLib === 'undefined') {
+        // Skip PDF.js on GitHub Pages due to CORS issues
         return basicInfo;
     }
     
+    // Try to enhance with PDF.js if available (only for local development)
     try {
         const loadingTask = pdfjsLib.getDocument({
             url: pdfPath,
@@ -280,21 +287,28 @@ async function loadPapers() {
         return;
     }
     
-    // Show loading state
-    papersGrid.innerHTML = '<p>Loading papers...</p>';
+    // Check if we're on GitHub Pages - use simpler, faster loading
+    const isGitHubPages = window.location.hostname.includes('github.io') || 
+                          window.location.hostname.includes('github.com');
     
     try {
-        // Load papers with timeout to prevent hanging
-        const loadPromises = paperFiles.map(file => 
-            Promise.race([
-                extractPaperMetadata(file),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout')), 5000)
-                )
-            ]).catch(() => parsePaperFromFilename(file))
-        );
+        let papers;
         
-        const papers = await Promise.all(loadPromises);
+        if (isGitHubPages) {
+            // On GitHub Pages, skip PDF.js and use filename parsing directly (faster, no CORS issues)
+            papers = paperFiles.map(file => parsePaperFromFilename(file));
+        } else {
+            // Local development - try PDF.js with timeout
+            const loadPromises = paperFiles.map(file => 
+                Promise.race([
+                    extractPaperMetadata(file),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Timeout')), 3000)
+                    )
+                ]).catch(() => parsePaperFromFilename(file))
+            );
+            papers = await Promise.all(loadPromises);
+        }
         
         if (papers.length === 0) {
             papersGrid.innerHTML = '<p>No papers found.</p>';
@@ -323,7 +337,7 @@ async function loadPapers() {
         });
     } catch (error) {
         console.error('Error loading papers:', error);
-        // Fallback: show papers using filename parsing only
+        // Final fallback: show papers using filename parsing only
         const papers = paperFiles.map(file => parsePaperFromFilename(file));
         papersGrid.innerHTML = papers.map(paper => `
             <div class="paper-card">
