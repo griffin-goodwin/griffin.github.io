@@ -385,6 +385,244 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* Space Weather Section */
+.spaceweather-section {
+    background-color: #ffffff;
+}
+
+.spaceweather-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.spaceweather-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.spaceweather-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: center;
+}
+
+.spaceweather-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.spaceweather-card h3 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+}
+
+.spaceweather-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.spaceweather-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.value-large {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.value-unit {
+    font-size: 1rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.spaceweather-class {
+    font-size: 1.125rem;
+    color: #555;
+    margin: 0.5rem 0;
+}
+
+.spaceweather-class strong {
+    color: #2c3e50;
+    font-weight: 700;
+}
+
+.spaceweather-time {
+    font-size: 0.875rem;
+    color: #888;
+    margin: 0.5rem 0;
+}
+
+.status-text {
+    color: #555;
+    margin: 1rem 0;
+    font-size: 1rem;
+}
+
+.spaceweather-note {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 1rem;
+    font-style: italic;
+}
+
+.alert-text {
+    color: #555;
+    margin: 1rem 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #667eea;
+}
+
+.spaceweather-controls {
+    text-align: center;
+    margin-top: 2rem;
+}
+
+.refresh-button {
+    padding: 0.75rem 2rem;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    font-size: 1rem;
+}
+
+.refresh-button:hover {
+    background-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.auto-refresh-note {
+    font-size: 0.875rem;
+    color: #888;
+    margin-top: 0.5rem;
+}
+
+.spaceweather-loading {
+    text-align: center;
+    color: #666;
+    padding: 3rem;
+    font-size: 1.125rem;
+}
+
+.spaceweather-error {
+    background: #fee;
+    padding: 2rem;
+    border-radius: 10px;
+    color: #c33;
+    text-align: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.spaceweather-error p {
+    margin: 0.5rem 0;
+}
+
+.error-detail {
+    font-size: 0.875rem;
+    color: #a33;
+    font-style: italic;
+}
+
+.spaceweather-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+    text-align: center;
+    color: #856404;
+}
+
+.spaceweather-warning p {
+    margin: 0.5rem 0;
+}
+
+.spaceweather-warning a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.spaceweather-warning a:hover {
+    text-decoration: underline;
+}
+
+.sdo-image-container {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.sdo-image-container a {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.sdo-image-container a:hover {
+    transform: scale(1.05);
+}
+
+.sdo-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin: 0.5rem 0;
+    cursor: pointer;
+    transition: box-shadow 0.3s ease;
+}
+
+.sdo-image:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sdo-image-note {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+.flare-class-x {
+    color: #e74c3c;
+}
+
+.flare-class-m {
+    color: #f39c12;
+}
+
+.flare-class-c {
+    color: #f1c40f;
+}
+
+.flare-class-b {
+    color: #3498db;
+}
+
+.flare-class-a {
+    color: #95a5a6;
+}
+
 /* Contact Section */
 .contact-section {
     background-color: #f8f9fa;
@@ -473,6 +711,10 @@ body {
     .cv-preview {
         height: 600px;
     }
+
+    .spaceweather-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -506,5 +748,13 @@ body {
 
     .cv-preview {
         height: 400px;
+    }
+
+    .value-large {
+        font-size: 2rem;
+    }
+
+    .spaceweather-card {
+        padding: 1.5rem;
     }
 }

@@ -362,6 +362,260 @@ async function loadPapers() {
     }
 }
 
+// Space Weather API Integration
+const CORS_PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy?quest='
+];
+
+let currentProxyIndex = 0;
+
+async function fetchWithProxy(url, proxyIndex = 0) {
+    const proxy = CORS_PROXIES[proxyIndex % CORS_PROXIES.length];
+    let fullUrl;
+    
+    if (proxy.includes('allorigins')) {
+        fullUrl = `${proxy}${encodeURIComponent(url)}`;
+    } else if (proxy.includes('codetabs')) {
+        fullUrl = `${proxy}${encodeURIComponent(url)}`;
+    } else {
+        fullUrl = `${proxy}${url}`;
+    }
+    
+    const response = await fetch(fullUrl);
+    
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    // Get response as text first to check content type
+    const text = await response.text();
+    
+    // Check if we got HTML instead of JSON
+    if (text.trim().startsWith('<')) {
+        throw new Error('Received HTML instead of JSON. API may be unavailable.');
+    }
+    
+    // Try to parse as JSON
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error('Invalid JSON response: ' + e.message);
+    }
+}
+
+async function fetchSpaceWeather() {
+    const container = document.getElementById('spaceweather-content');
+    
+    if (!container) {
+        return;
+    }
+    
+    // Show loading state
+    container.innerHTML = '<div class="spaceweather-loading">Loading space weather data...</div>';
+    
+    try {
+        let latestFlare = null;
+        let flareForecast = null;
+        
+        // Fetch latest flare
+        for (let i = 0; i < CORS_PROXIES.length; i++) {
+            try {
+                const flareUrl = 'https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json';
+                latestFlare = await fetchWithProxy(flareUrl, i);
+                break;
+            } catch (e) {
+                console.warn(`Proxy ${i} failed for latest flare:`, e);
+            }
+        }
+        
+        // Fetch flare forecast
+        for (let i = 0; i < CORS_PROXIES.length; i++) {
+            try {
+                const forecastUrl = 'https://services.swpc.noaa.gov/json/solar_probabilities.json';
+                flareForecast = await fetchWithProxy(forecastUrl, i);
+                break;
+            } catch (e) {
+                console.warn(`Proxy ${i} failed for flare forecast:`, e);
+            }
+        }
+        
+        // Display the data (alerts removed)
+        displaySpaceWeather(container, null, latestFlare, flareForecast);
+        
+    } catch (error) {
+        console.error('Error fetching space weather:', error);
+        // Show fallback data instead of error
+        displaySpaceWeather(container, null, null, null, true);
+    }
+}
+
+function getSDOAIAImageUrl(flareTime) {
+    // Get SDO AIA image from sdo.gsfc.nasa.gov
+    // Use latest available image or construct URL based on time
+    if (!flareTime) {
+        // Return latest image if no time provided
+        return 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg';
+    }
+    
+    try {
+        const date = new Date(flareTime);
+        // SDO images are typically available hourly
+        // Use the latest image URL format from SDO
+        // For specific times, we can use the latest image as fallback
+        return 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg';
+    } catch (e) {
+        console.warn('Error constructing SDO image URL:', e);
+        return 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg';
+    }
+}
+
+function displaySpaceWeather(container, alerts, latestFlare, flareForecast, showFallback = false) {
+    // Format time helper
+    const formatTime = (timeStr) => {
+        if (!timeStr) return 'N/A';
+        try {
+            const date = new Date(timeStr);
+            return date.toLocaleString();
+        } catch (e) {
+            return timeStr;
+        }
+    };
+    
+    // Parse latest flare - using actual API field names
+    let flareClass = 'N/A';
+    let flareBeginTime = 'N/A';
+    let flarePeakTime = 'N/A';
+    let flareEndTime = 'N/A';
+    let flareMaxFlux = 'N/A';
+    let sdoImageUrl = getSDOAIAImageUrl(); // Always show current sun image
+    
+    if (!showFallback && latestFlare) {
+        let flare = null;
+        if (Array.isArray(latestFlare) && latestFlare.length > 0) {
+            flare = latestFlare[0]; // Most recent flare
+        } else if (typeof latestFlare === 'object') {
+            flare = latestFlare;
+        }
+        
+        if (flare) {
+            // Use actual field names from the API
+            flareClass = flare.current_class || flare.max_class || flare.begin_class || 
+                        flare.end_class || 'N/A';
+            flareBeginTime = formatTime(flare.begin_time);
+            flarePeakTime = formatTime(flare.max_time);
+            flareEndTime = formatTime(flare.end_time);
+            flareMaxFlux = flare.max_xrlong || flare.current_int_xrlong || 'N/A';
+            
+            // Format flux value if it's a number
+            if (flareMaxFlux !== 'N/A' && typeof flareMaxFlux === 'number') {
+                flareMaxFlux = flareMaxFlux.toExponential(2) + ' W/m²';
+            }
+        }
+    }
+    
+    // Parse flare forecast - using actual API field names
+    let forecastX = 'N/A';
+    let forecastM = 'N/A';
+    let forecastC = 'N/A';
+    let forecastTime = 'N/A';
+    
+    if (!showFallback && flareForecast) {
+        if (Array.isArray(flareForecast) && flareForecast.length > 0) {
+            const forecast = flareForecast[0]; // Most recent forecast (first in array)
+            // Use _1_day fields for 1-day forecast probabilities
+            forecastX = forecast.x_class_1_day !== undefined ? forecast.x_class_1_day + '%' : 'N/A';
+            forecastM = forecast.m_class_1_day !== undefined ? forecast.m_class_1_day + '%' : 'N/A';
+            forecastC = forecast.c_class_1_day !== undefined ? forecast.c_class_1_day + '%' : 'N/A';
+            forecastTime = formatTime(forecast.date);
+        } else if (typeof flareForecast === 'object') {
+            forecastX = flareForecast.x_class_1_day !== undefined ? flareForecast.x_class_1_day + '%' : 'N/A';
+            forecastM = flareForecast.m_class_1_day !== undefined ? flareForecast.m_class_1_day + '%' : 'N/A';
+            forecastC = flareForecast.c_class_1_day !== undefined ? flareForecast.c_class_1_day + '%' : 'N/A';
+            forecastTime = formatTime(flareForecast.date);
+        }
+    }
+    
+    // Show fallback message if API failed
+    const fallbackMessage = showFallback ? `
+        <div class="spaceweather-warning">
+            <p>⚠️ Live data temporarily unavailable. Showing placeholder information.</p>
+            <p>Please check back later or visit <a href="https://www.swpc.noaa.gov" target="_blank">NOAA SWPC</a> directly.</p>
+        </div>
+    ` : '';
+    
+    container.innerHTML = `
+        ${fallbackMessage}
+        <div class="spaceweather-grid">
+            <div class="spaceweather-card">
+                <h3>Latest Flare Event</h3>
+                <div class="spaceweather-info">
+                    <div class="spaceweather-value">
+                        <span class="value-large flare-class-${flareClass.toLowerCase().charAt(0)}">${flareClass}</span>
+                    </div>
+                    ${flareMaxFlux !== 'N/A' ? `<p class="spaceweather-class">Max Flux: <strong>${flareMaxFlux}</strong></p>` : ''}
+                    <p class="spaceweather-time">Begin: ${flareBeginTime}</p>
+                    ${flarePeakTime !== 'N/A' ? `<p class="spaceweather-time">Peak: ${flarePeakTime}</p>` : ''}
+                    ${flareEndTime !== 'N/A' ? `<p class="spaceweather-time">End: ${flareEndTime}</p>` : ''}
+                </div>
+            </div>
+            
+            <div class="spaceweather-card">
+                <h3>The Sun Right Now</h3>
+                <div class="spaceweather-info">
+                    <div class="sdo-image-container">
+                        <a href="https://sdo.gsfc.nasa.gov" target="_blank" title="View on SDO website">
+                            <img src="${sdoImageUrl}" alt="SDO AIA 193Å Image - The Sun Right Now" class="sdo-image" 
+                                 onerror="this.onerror=null; this.src='https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg';">
+                        </a>
+                        <p class="sdo-image-note">SDO AIA 193Å</p>
+                        <p class="sdo-image-note">Click to view on SDO website</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="spaceweather-card">
+                <h3>Flare Forecast</h3>
+                <div class="spaceweather-info">
+                    <p class="spaceweather-class">X-Class Probability: <strong>${forecastX}</strong></p>
+                    <p class="spaceweather-class">M-Class Probability: <strong>${forecastM}</strong></p>
+                    <p class="spaceweather-class">C-Class Probability: <strong>${forecastC}</strong></p>
+                    <p class="spaceweather-time">Forecast Time: ${forecastTime}</p>
+                </div>
+            </div>
+        </div>
+        <div class="spaceweather-controls">
+            <button onclick="fetchSpaceWeather()" class="refresh-button">Refresh Data</button>
+            <p class="auto-refresh-note">Data auto-refreshes every 5 minutes</p>
+        </div>
+    `;
+    
+    // Apply animations to cards
+    const cards = container.querySelectorAll('.spaceweather-card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        card.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
+        observer.observe(card);
+    });
+}
+
+// Auto-refresh space weather data every 5 minutes
+let spaceWeatherInterval = null;
+
+function startSpaceWeatherAutoRefresh() {
+    // Clear any existing interval
+    if (spaceWeatherInterval) {
+        clearInterval(spaceWeatherInterval);
+    }
+    
+    // Set up auto-refresh every 5 minutes (300000 ms)
+    spaceWeatherInterval = setInterval(() => {
+        fetchSpaceWeather();
+    }, 300000);
+}
+
 // Observe project cards for animation
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize PDF.js worker if available
@@ -375,6 +629,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load papers - will work even if PDF.js fails
     // Papers will always show using filename parsing as fallback
     loadPapers();
+    
+    // Load space weather data
+    fetchSpaceWeather();
+    startSpaceWeatherAutoRefresh();
     
     // Observe existing project cards (if any)
     const projectCards = document.querySelectorAll('.project-card');
