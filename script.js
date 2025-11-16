@@ -170,12 +170,30 @@ function getLanguageColor(language) {
     return colors[language] || '#6e7681';
 }
 
-// PDF Metadata Extraction
-const paperFiles = [
-    'Papers/2505.10390v1.pdf',
-    'Papers/2510.22801v1.pdf',
-    'Papers/Goodwin_2024_ApJ_964_163.pdf',
-    'Papers/Goodwin_2025_ApJ_981_200.pdf'
+// PDF Metadata - Hardcoded paper information
+// Note: Abstracts and full author lists should be extracted from PDFs and updated here
+const paperData = [
+    {
+        path: 'Papers/2510.22801v1.pdf',
+        title: 'FOXES: A Framework For Operational X-ray Emission Synthesis',
+        authors: 'Griffin T. Goodwin, Jayant Biradar, Alison J. March, Christoph Schirninger, Robert Jarolim, Angelos Vourlidas, Lorien Pratt',
+        publicationInfo: 'arXiv:2510.22801',
+        abstract: `Understanding solar flares is critical for predicting space weather, as their activity shapes how the Sun influences Earth and its environment. The development of reliable forecasting methodologies of these events depends on robust flare catalogs, but current methods are limited to flare classification using integrated soft X-ray emission that are available only from Earth’s perspective. This reduces accuracy in pinpointing the location and strength of farside flares and their connection to geoeffective events. In this work, we introduce a Vision Transformer (ViT)-based approach that translates Extreme Ultraviolet (EUV) observations into soft x-ray flux while also setting the groundwork for estimating flare locations in the future. The model achieves accurate flux predictions across flare classes using quantitative metrics. This paves the way for EUV-based flare detection to be extended beyond Earth’s line of sight, which allows for a more comprehensive and complete solar flare catalog.`
+    },
+    {
+        path: 'Papers/Goodwin_2025_ApJ_981_200.pdf',
+        title: 'The Impacts of Magnetogram Projection Effects on Solar Flare Forecasting',
+        authors: 'Griffin T. Goodwin, Viachyslav M. Sadykov, and Petrus C. Martens',
+        publicationInfo: 'ApJ 2025, 981, 200',
+        abstract: 'This work explores the impacts of magnetogram projection effects on machine-learning-based solar flare forecasting models. Utilizing a methodology proposed by D. A. Falconer et al., we correct for projection effects present in Georgia State University’s Space Weather Analytics for Solar Flares benchmark data set. We then train and test a support vector machine classifier on the corrected and uncorrected data, comparing differences in performance. Additionally, we provide insight into several other methodologies that mitigate projection effects, such as stacking ensemble classifiers and active region location-informed models. Our analysis shows that data corrections slightly increase both the true-positive (correctly predicted flaring samples) and false-positive (nonflaring samples predicted as flaring) prediction rates, averaging a few percent. Similarly, changes in performance metrics are minimal for the stacking ensemble and location-based model. This suggests that a more complicated correction methodology may be needed to see improvements. It may also indicate inherent limitations when using magnetogram data for flare forecasting.'
+    },
+    {
+        path: 'Papers/Goodwin_2024_ApJ_964_163.pdf',
+        title: 'Investigating Performance Trends of Simulated Real-time Solar Flare Predictions: The Impacts of Training Windows, Data Volumes, and the Solar Cycle',
+        authors: 'Griffin T. Goodwin, Viachyslav M. Sadykov, and Petrus C. Martens',
+        publicationInfo: 'ApJ 2024, 964, 163',
+        abstract: 'This study explores the behavior of machine-learning-based flare forecasting models deployed in a simulated operational environment. Using Georgia State University’s Space Weather Analytics for Solar Flares benchmark data set, we examine the impacts of training methodology and the solar cycle on decision tree, support vector machine, and multilayer perceptron performance. We implement our classifiers using three temporal training windows: stationary, rolling, and expanding. The stationary window trains models using a single set of data available before the first forecasting instance, which remains constant throughout the solar cycle. The rolling window trains models using data from a constant time interval before the forecasting instance, which moves with the solar cycle. Finally, the expanding window trains models using all available data before the forecasting instance. For each window, a number of input features (1, 5, 10, 25, 50, and 120) and temporal sizes (5, 8, 11, 14, 17, and 20 months) were tested. To our surprise, we found that, for a window of 20 months, skill scores were comparable regardless of the window type, feature count, and classifier selected. Furthermore, reducing the size of this window only marginally decreased stationary and rolling window performance. This implies that, given enough data, a stationary window can be chosen over other window types, eliminating the need for model retraining. Finally, a moderately strong positive correlation was found to exist between a model’s false-positive rate and the solar X-ray background flux. This suggests that the solar cycle phase has a considerable influence on forecasting.'
+    },
 ];
 
 function parsePaperFromFilename(pdfPath) {
@@ -214,6 +232,7 @@ function parsePaperFromFilename(pdfPath) {
         title: title,
         authors: 'Griffin Goodwin',
         publicationInfo: publicationInfo || filename,
+        abstract: '',
         arxivId: arxivId,
         filename: filename,
         path: pdfPath
@@ -245,29 +264,124 @@ async function extractPaperMetadata(pdfPath) {
         const pdf = await loadingTask.promise;
         const metadata = await pdf.getMetadata();
         
-        // Try to get title from metadata
+        // Try to get title and authors from metadata
         let title = metadata.info?.Title || '';
         let authors = metadata.info?.Author || '';
+        let abstract = '';
         
-        // If no title from metadata, try to extract from first page
-        if (!title) {
-            try {
-                const page = await pdf.getPage(1);
+        // Extract text from first few pages to get title, authors, and abstract
+        try {
+            const numPages = Math.min(pdf.numPages, 3); // Check first 3 pages
+            let fullText = '';
+            
+            for (let i = 1; i <= numPages; i++) {
+                const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                const text = textContent.items.map(item => item.str).join(' ');
-                const lines = text.split('\n').filter(line => line.trim());
-                if (lines.length > 0) {
-                    title = lines[0].substring(0, 200); // First line, max 200 chars
-                }
-            } catch (e) {
-                console.warn('Could not extract text from PDF:', e);
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + '\n';
             }
+            
+            const lines = fullText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            // Extract title (usually first substantial line)
+            if (!title && lines.length > 0) {
+                // Find the first line that looks like a title (not too short, not all caps unless short)
+                for (let i = 0; i < Math.min(10, lines.length); i++) {
+                    const line = lines[i];
+                    if (line.length > 20 && line.length < 300) {
+                        title = line;
+                        break;
+                    }
+                }
+            }
+            
+            // Extract authors (usually after title, before abstract)
+            if (!authors || authors === 'Griffin Goodwin') {
+                // Look for author patterns: lines with "and", commas, or email patterns
+                const authorPatterns = [
+                    /^[A-Z][a-z]+ [A-Z]\. [A-Z][a-z]+(?:, [A-Z][a-z]+ [A-Z]\. [A-Z][a-z]+)*(?: and [A-Z][a-z]+ [A-Z]\. [A-Z][a-z]+)?/,
+                    /^[A-Z][a-z]+ [A-Z][a-z]+(?:, [A-Z][a-z]+ [A-Z][a-z]+)*(?: and [A-Z][a-z]+ [A-Z][a-z]+)?/,
+                ];
+                
+                // Find title index
+                let titleIndex = -1;
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i] === title || lines[i].includes(title.substring(0, 20))) {
+                        titleIndex = i;
+                        break;
+                    }
+                }
+                
+                // Look for authors after title
+                for (let i = (titleIndex >= 0 ? titleIndex + 1 : 0); i < Math.min(titleIndex + 10, lines.length); i++) {
+                    const line = lines[i];
+                    // Skip common non-author lines
+                    if (line.toLowerCase().includes('abstract') || 
+                        line.toLowerCase().includes('keywords') ||
+                        line.toLowerCase().includes('introduction') ||
+                        line.length > 200) {
+                        break;
+                    }
+                    // Check if line looks like authors
+                    if (line.includes(',') || line.includes(' and ') || 
+                        (line.split(' ').length >= 2 && line.split(' ').length <= 15)) {
+                        // Check if it contains email (common in author lines)
+                        if (line.includes('@') || line.match(/[A-Z][a-z]+ [A-Z]\. [A-Z]/)) {
+                            authors = line;
+                            break;
+                        } else if (authors === 'Griffin Goodwin' && line.length > 10 && line.length < 200) {
+                            authors = line;
+                        }
+                    }
+                }
+            }
+            
+            // Extract abstract
+            // Look for "Abstract" keyword
+            const abstractKeywords = ['Abstract', 'ABSTRACT', 'Summary'];
+            let abstractStartIndex = -1;
+            
+            for (let i = 0; i < lines.length; i++) {
+                if (abstractKeywords.some(keyword => lines[i].toLowerCase().includes(keyword.toLowerCase()))) {
+                    abstractStartIndex = i;
+                    break;
+                }
+            }
+            
+            if (abstractStartIndex >= 0) {
+                // Collect text after "Abstract" until we hit another section
+                const sectionKeywords = ['Introduction', 'Keywords', '1.', 'I.', 'Background'];
+                let abstractLines = [];
+                
+                for (let i = abstractStartIndex + 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    // Stop if we hit another section
+                    if (sectionKeywords.some(keyword => line.toLowerCase().startsWith(keyword.toLowerCase()))) {
+                        break;
+                    }
+                    // Stop if line looks like a section header (all caps, short)
+                    if (line.length < 50 && line === line.toUpperCase() && line.length > 3) {
+                        break;
+                    }
+                    abstractLines.push(line);
+                }
+                
+                abstract = abstractLines.join(' ').trim();
+                // Limit abstract length
+                if (abstract.length > 1000) {
+                    abstract = abstract.substring(0, 1000) + '...';
+                }
+            }
+            
+        } catch (e) {
+            console.warn('Could not extract text from PDF:', e);
         }
         
         return {
             title: title || basicInfo.title,
             authors: authors || basicInfo.authors,
             publicationInfo: basicInfo.publicationInfo,
+            abstract: abstract || '',
             arxivId: basicInfo.arxivId,
             filename: basicInfo.filename,
             path: pdfPath
@@ -287,45 +401,43 @@ async function loadPapers() {
         return;
     }
     
-    // Check if we're on GitHub Pages - use simpler, faster loading
-    const isGitHubPages = window.location.hostname.includes('github.io') || 
-                          window.location.hostname.includes('github.com');
-    
     try {
-        let papers;
-        
-        if (isGitHubPages) {
-            // On GitHub Pages, skip PDF.js and use filename parsing directly (faster, no CORS issues)
-            papers = paperFiles.map(file => parsePaperFromFilename(file));
-        } else {
-            // Local development - try PDF.js with timeout
-            const loadPromises = paperFiles.map(file => 
-                Promise.race([
-                    extractPaperMetadata(file),
-                    new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Timeout')), 3000)
-                    )
-                ]).catch(() => parsePaperFromFilename(file))
-            );
-            papers = await Promise.all(loadPromises);
-        }
+        // Use hardcoded paper data
+        const papers = paperData;
         
         if (papers.length === 0) {
             papersGrid.innerHTML = '<p>No papers found.</p>';
             return;
         }
         
-        papersGrid.innerHTML = papers.map(paper => `
+        papersGrid.innerHTML = papers.map((paper, index) => {
+            const abstractId = `abstract-${index}`;
+            const truncatedLength = 200;
+            const hasAbstract = paper.abstract && paper.abstract.length > 0;
+            const needsTruncation = hasAbstract && paper.abstract.length > truncatedLength;
+            const truncatedAbstract = needsTruncation ? paper.abstract.substring(0, truncatedLength) + '...' : paper.abstract;
+            
+            return `
             <div class="paper-card">
                 <h3>${paper.title}</h3>
                 <p class="paper-authors">${paper.authors}</p>
                 <p class="paper-publication">${paper.publicationInfo}</p>
+                ${hasAbstract ? `
+                    <div class="paper-abstract" id="${abstractId}">
+                        <strong>Abstract:</strong> 
+                        <span class="abstract-text">${truncatedAbstract}</span>
+                        ${needsTruncation ? `
+                            <span class="abstract-full" style="display: none;">${paper.abstract}</span>
+                            <button class="abstract-toggle" onclick="toggleAbstract('${abstractId}')">Read more</button>
+                        ` : ''}
+                    </div>
+                ` : ''}
                 <div class="paper-links">
                     <a href="${paper.path}" class="paper-link" target="_blank">View PDF</a>
                     <a href="${paper.path}" class="paper-link" download>Download</a>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
         
         // Apply animations to paper cards
         const paperCards = papersGrid.querySelectorAll('.paper-card');
@@ -337,28 +449,7 @@ async function loadPapers() {
         });
     } catch (error) {
         console.error('Error loading papers:', error);
-        // Final fallback: show papers using filename parsing only
-        const papers = paperFiles.map(file => parsePaperFromFilename(file));
-        papersGrid.innerHTML = papers.map(paper => `
-            <div class="paper-card">
-                <h3>${paper.title}</h3>
-                <p class="paper-authors">${paper.authors}</p>
-                <p class="paper-publication">${paper.publicationInfo}</p>
-                <div class="paper-links">
-                    <a href="${paper.path}" class="paper-link" target="_blank">View PDF</a>
-                    <a href="${paper.path}" class="paper-link" download>Download</a>
-                </div>
-            </div>
-        `).join('');
-        
-        // Apply animations
-        const paperCards = papersGrid.querySelectorAll('.paper-card');
-        paperCards.forEach((card, index) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(30px)';
-            card.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
-            observer.observe(card);
-        });
+        papersGrid.innerHTML = '<p>Error loading papers. Please try again later.</p>';
     }
 }
 
@@ -418,6 +509,7 @@ async function fetchSpaceWeather() {
     try {
         let latestFlare = null;
         let flareForecast = null;
+        let xrayData = null;
         
         // Fetch latest flare
         for (let i = 0; i < CORS_PROXIES.length; i++) {
@@ -469,6 +561,166 @@ function getSDOAIAImageUrl(flareTime) {
         console.warn('Error constructing SDO image URL:', e);
         return 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg';
     }
+}
+
+function drawSXRChart(canvasId, xrayData) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !xrayData || !Array.isArray(xrayData) || xrayData.length === 0) {
+        return;
+    }
+    
+    // Make canvas responsive
+    const container = canvas.parentElement;
+    const containerWidth = container ? container.clientWidth - 40 : 600;
+    const aspectRatio = 600 / 200; // Original aspect ratio
+    canvas.width = containerWidth;
+    canvas.height = containerWidth / aspectRatio;
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = 40;
+    const chartWidth = width - 2 * padding;
+    const chartHeight = height - 2 * padding;
+    
+    // Get last 6 hours of data (or all if less)
+    const now = Date.now();
+    const sixHoursAgo = now - (6 * 60 * 60 * 1000);
+    const recentData = xrayData
+        .filter(point => {
+            const pointTime = new Date(point.time_tag || point.time).getTime();
+            return pointTime >= sixHoursAgo;
+        })
+        .slice(-100); // Limit to last 100 points for performance
+    
+    if (recentData.length === 0) {
+        return;
+    }
+    
+    // Extract flux values (try different field names)
+    const fluxData = recentData.map(point => {
+        const flux = point.flux || point.flux_avg || point.xrsa || point.xrsb || 0;
+        return typeof flux === 'number' ? flux : parseFloat(flux) || 0;
+    });
+    
+    const times = recentData.map(point => new Date(point.time_tag || point.time).getTime());
+    
+    // Find min/max for scaling
+    const minFlux = Math.min(...fluxData.filter(f => f > 0));
+    const maxFlux = Math.max(...fluxData);
+    
+    // Use log scale for better visualization
+    const logMin = Math.log10(Math.max(minFlux, 1e-8));
+    const logMax = Math.log10(Math.max(maxFlux, 1e-8));
+    const logRange = logMax - logMin;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw background
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw grid lines
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (chartHeight / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+    }
+    
+    // Draw axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, height - padding);
+    ctx.lineTo(width - padding, height - padding);
+    ctx.stroke();
+    
+    // Draw data line
+    ctx.strokeStyle = '#667eea';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    recentData.forEach((point, index) => {
+        const flux = fluxData[index];
+        if (flux > 0) {
+            const logFlux = Math.log10(flux);
+            const normalizedLog = (logFlux - logMin) / logRange;
+            const x = padding + (chartWidth / (recentData.length - 1)) * index;
+            const y = height - padding - (normalizedLog * chartHeight);
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+    });
+    ctx.stroke();
+    
+    // Draw flare thresholds
+    const thresholds = [
+        { value: 1e-7, label: 'B', color: '#3498db' },
+        { value: 1e-6, label: 'C', color: '#f1c40f' },
+        { value: 1e-5, label: 'M', color: '#f39c12' },
+        { value: 1e-4, label: 'X', color: '#e74c3c' }
+    ];
+    
+    thresholds.forEach(threshold => {
+        if (threshold.value <= maxFlux) {
+            const logThreshold = Math.log10(threshold.value);
+            const normalizedLog = (logThreshold - logMin) / logRange;
+            const y = height - padding - (normalizedLog * chartHeight);
+            
+            ctx.strokeStyle = threshold.color;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Label
+            ctx.fillStyle = threshold.color;
+            ctx.font = '10px sans-serif';
+            ctx.fillText(threshold.label, padding - 15, y + 3);
+        }
+    });
+    
+    // Draw time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    const timeLabels = 5;
+    for (let i = 0; i <= timeLabels; i++) {
+        const index = Math.floor((recentData.length - 1) * (i / timeLabels));
+        if (index < recentData.length) {
+            const time = new Date(times[index]);
+            const hours = time.getHours();
+            const minutes = time.getMinutes();
+            const label = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            const x = padding + (chartWidth / timeLabels) * i;
+            ctx.fillText(label, x, height - padding + 20);
+        }
+    }
+    
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, height / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('X-Ray Flux (W/m²)', 0, 0);
+    ctx.restore();
 }
 
 function displaySpaceWeather(container, alerts, latestFlare, flareForecast, showFallback = false) {
@@ -549,6 +801,17 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
         ${fallbackMessage}
         <div class="spaceweather-grid">
             <div class="spaceweather-card">
+                <h3>SXR Flux Overview</h3>
+                <div class="spaceweather-info">
+                    <img src="https://services.swpc.noaa.gov/images/swx-overview-small.gif" alt="Space Weather X-Ray Overview" class="sxr-overview-image" 
+                         onclick="openSXRModal(this.src)"
+                         style="cursor: pointer;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <p style="display:none; font-size:0.875rem; color:#888;">Image unavailable</p>
+                </div>
+            </div>
+            
+            <div class="spaceweather-card">
                 <h3>Latest Flare Event</h3>
                 <div class="spaceweather-info">
                     <div class="spaceweather-value">
@@ -599,6 +862,7 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
         card.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
         observer.observe(card);
     });
+    
 }
 
 // Auto-refresh space weather data every 5 minutes
@@ -614,6 +878,89 @@ function startSpaceWeatherAutoRefresh() {
     spaceWeatherInterval = setInterval(() => {
         fetchSpaceWeather();
     }, 300000);
+}
+
+// Open modal for SXR overview image
+function openSXRModal(imageSrc) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'sxr-modal-overlay';
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            closeSXRModal();
+        }
+    };
+    
+    // Create modal content
+    const modalContent = document.createElement('div');
+    modalContent.className = 'sxr-modal-content';
+    modalContent.onclick = function(e) {
+        e.stopPropagation();
+    };
+    
+    // Create close button
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'sxr-modal-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = closeSXRModal;
+    
+    // Create image
+    const img = document.createElement('img');
+    img.src = imageSrc.replace('swx-overview-small.gif', 'swx-overview.gif'); // Use larger version if available
+    img.alt = 'Space Weather X-Ray Overview - Full Size';
+    img.className = 'sxr-modal-image';
+    img.onerror = function() {
+        // Fallback to small version if large version doesn't exist
+        this.src = imageSrc;
+    };
+    
+    modalContent.appendChild(closeBtn);
+    modalContent.appendChild(img);
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+}
+
+// Close modal
+function closeSXRModal() {
+    const modal = document.querySelector('.sxr-modal-overlay');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeSXRModal();
+    }
+});
+
+// Toggle abstract expand/collapse
+function toggleAbstract(abstractId) {
+    const abstractDiv = document.getElementById(abstractId);
+    if (!abstractDiv) return;
+    
+    const abstractText = abstractDiv.querySelector('.abstract-text');
+    const abstractFull = abstractDiv.querySelector('.abstract-full');
+    const toggleButton = abstractDiv.querySelector('.abstract-toggle');
+    
+    if (!abstractFull || !toggleButton) return;
+    
+    const isExpanded = abstractFull.style.display !== 'none';
+    
+    if (isExpanded) {
+        // Collapse
+        abstractText.style.display = 'inline';
+        abstractFull.style.display = 'none';
+        toggleButton.textContent = 'Read more';
+    } else {
+        // Expand
+        abstractText.style.display = 'none';
+        abstractFull.style.display = 'inline';
+        toggleButton.textContent = 'Read less';
+    }
 }
 
 // Observe project cards for animation
