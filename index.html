@@ -6,6 +6,7 @@
     <meta name="description" content="Griffin Goodwin - Personal Website">
     <title>Griffin Goodwin</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -14,6 +15,8 @@
             <ul class="nav-menu">
                 <li><a href="#about" class="nav-link">About</a></li>
                 <li><a href="#projects" class="nav-link">Projects</a></li>
+                <li><a href="#papers" class="nav-link">Papers</a></li>
+                <li><a href="#cv" class="nav-link">CV</a></li>
                 <li><a href="#contact" class="nav-link">Contact</a></li>
             </ul>
         </div>
@@ -40,22 +43,28 @@
     <section id="projects" class="section projects-section">
         <div class="container">
             <h2 class="section-title">Projects</h2>
-            <div class="projects-grid">
-                <div class="project-card">
-                    <h3>Project One</h3>
-                    <p>An innovative solution to everyday problems.</p>
-                    <a href="#" class="project-link">Learn More →</a>
+            <div id="github-stats" class="github-stats"></div>
+            <div id="projects-grid" class="projects-grid"></div>
+        </div>
+    </section>
+
+    <section id="papers" class="section papers-section">
+        <div class="container">
+            <h2 class="section-title">Research Papers</h2>
+            <div id="papers-grid" class="papers-grid"></div>
+        </div>
+    </section>
+
+    <section id="cv" class="section cv-section">
+        <div class="container">
+            <h2 class="section-title">Curriculum Vitae</h2>
+            <div class="cv-content">
+                <p class="cv-text">Download or view my resume below.</p>
+                <div class="cv-links">
+                    <a href="CV/Resume_Updated.pdf" class="cv-button" target="_blank">View PDF</a>
+                    <a href="CV/Resume_Updated.pdf" class="cv-button" download>Download PDF</a>
                 </div>
-                <div class="project-card">
-                    <h3>Project Two</h3>
-                    <p>Building tools that make a difference.</p>
-                    <a href="#" class="project-link">Learn More →</a>
-                </div>
-                <div class="project-card">
-                    <h3>Project Three</h3>
-                    <p>Exploring new technologies and frameworks.</p>
-                    <a href="#" class="project-link">Learn More →</a>
-                </div>
+                <iframe src="CV/Resume_Updated.pdf" class="cv-preview" frameborder="0"></iframe>
             </div>
         </div>
     </section>
