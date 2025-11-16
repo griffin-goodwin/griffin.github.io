@@ -178,7 +178,7 @@ const paperData = [
         title: 'FOXES: A Framework For Operational X-ray Emission Synthesis',
         authors: 'Griffin T. Goodwin, Jayant Biradar, Alison J. March, Christoph Schirninger, Robert Jarolim, Angelos Vourlidas, Lorien Pratt',
         publicationInfo: 'arXiv:2510.22801',
-        abstract: `Understanding solar flares is critical for predicting space weather, as their activity shapes how the Sun influences Earth and its environment. The development of reliable forecasting methodologies of these events depends on robust flare catalogs, but current methods are limited to flare classification using integrated soft X-ray emission that are available only from Earth’s perspective. This reduces accuracy in pinpointing the location and strength of farside flares and their connection to geoeffective events. In this work, we introduce a Vision Transformer (ViT)-based approach that translates Extreme Ultraviolet (EUV) observations into soft x-ray flux while also setting the groundwork for estimating flare locations in the future. The model achieves accurate flux predictions across flare classes using quantitative metrics. This paves the way for EUV-based flare detection to be extended beyond Earth’s line of sight, which allows for a more comprehensive and complete solar flare catalog.`
+        abstract: 'Understanding solar flares is critical for predicting space weather, as their activity shapes how the Sun influences Earth and its environment. The development of reliable forecasting methodologies of these events depends on robust flare catalogs, but current methods are limited to flare classification using integrated soft X-ray emission that are available only from Earth\'s perspective. This reduces accuracy in pinpointing the location and strength of farside flares and their connection to geoeffective events. In this work, we introduce a Vision Transformer (ViT)-based approach that translates Extreme Ultraviolet (EUV) observations into soft x-ray flux while also setting the groundwork for estimating flare locations in the future. The model achieves accurate flux predictions across flare classes using quantitative metrics. This paves the way for EUV-based flare detection to be extended beyond Earth\'s line of sight, which allows for a more comprehensive and complete solar flare catalog.'
     },
     {
         path: 'Papers/Goodwin_2025_ApJ_981_200.pdf',
@@ -803,11 +803,12 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
             <div class="spaceweather-card">
                 <h3>SXR Flux Overview</h3>
                 <div class="spaceweather-info">
-                    <img id="sxr-overview-img" src="" alt="Space Weather X-Ray Overview" class="sxr-overview-image" 
-                         onclick="openSXRModal(this.src || 'https://services.swpc.noaa.gov/images/swx-overview-small.gif')"
-                         style="cursor: pointer; display: none;">
-                    <div class="sxr-image-loading" style="text-align: center; padding: 2rem; color: #888;">Loading image...</div>
-                    <p class="sxr-image-error" style="display:none; font-size:0.875rem; color:#888; text-align: center; padding: 1rem;">Image unavailable. <a href="https://services.swpc.noaa.gov/images/swx-overview-small.gif" target="_blank" style="color: #3498db;">View directly</a></p>
+                    <img src="https://services.swpc.noaa.gov/images/swx-overview-small.gif?v=${Date.now()}" 
+                         alt="Space Weather X-Ray Overview" 
+                         class="sxr-overview-image" 
+                         onclick="openSXRModal('https://services.swpc.noaa.gov/images/swx-overview-small.gif')"
+                         style="cursor: pointer;"
+                         onerror="this.onerror=null; this.src='https://corsproxy.io/?' + encodeURIComponent('https://services.swpc.noaa.gov/images/swx-overview-small.gif');">
                 </div>
             </div>
             
@@ -863,62 +864,6 @@ function displaySpaceWeather(container, alerts, latestFlare, flareForecast, show
         observer.observe(card);
     });
     
-    // Load SXR overview image with CORS proxy fallback
-    loadSXRImage();
-}
-
-// Load SXR overview image with fallback
-async function loadSXRImage() {
-    const img = document.getElementById('sxr-overview-img');
-    const loadingDiv = document.querySelector('.sxr-image-loading');
-    const errorDiv = document.querySelector('.sxr-image-error');
-    
-    if (!img) return;
-    
-    const imageUrl = 'https://services.swpc.noaa.gov/images/swx-overview-small.gif';
-    
-    // Try loading directly first
-    img.onload = function() {
-        img.style.display = 'block';
-        if (loadingDiv) loadingDiv.style.display = 'none';
-    };
-    
-    img.onerror = function() {
-        // If direct load fails, try using a proxy
-        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(imageUrl);
-        const proxyImg = new Image();
-        
-        proxyImg.onload = function() {
-            img.src = proxyUrl;
-            img.style.display = 'block';
-            if (loadingDiv) loadingDiv.style.display = 'none';
-        };
-        
-        proxyImg.onerror = function() {
-            // Try another proxy
-            const proxyUrl2 = 'https://corsproxy.io/?' + encodeURIComponent(imageUrl);
-            const proxyImg2 = new Image();
-            
-            proxyImg2.onload = function() {
-                img.src = proxyUrl2;
-                img.style.display = 'block';
-                if (loadingDiv) loadingDiv.style.display = 'none';
-            };
-            
-            proxyImg2.onerror = function() {
-                // All attempts failed
-                if (loadingDiv) loadingDiv.style.display = 'none';
-                if (errorDiv) errorDiv.style.display = 'block';
-            };
-            
-            proxyImg2.src = proxyUrl2;
-        };
-        
-        proxyImg.src = proxyUrl;
-    };
-    
-    // Start loading
-    img.src = imageUrl;
 }
 
 // Auto-refresh space weather data every 5 minutes
