@@ -123,7 +123,6 @@ function displayGitHubRepos(container, repos) {
     container.innerHTML = repos.map(repo => `
         <div class="project-card">
             <h3>${repo.name}</h3>
-            <p>${repo.description || 'No description available'}</p>
             <div class="repo-meta">
                 ${repo.language ? `<span class="repo-language" style="background-color: ${getLanguageColor(repo.language)}">${repo.language}</span>` : ''}
                 <span class="repo-stats">
