@@ -1021,6 +1021,9 @@ function displayResearchProfiles() {
                 </div>
             `).join('')}
         </div>
+        <div class="research-note">
+            <p><strong>Note:</strong> These stats are manually updated. Check the profiles for real-time data.</p>
+        </div>
     `;
 }
 
