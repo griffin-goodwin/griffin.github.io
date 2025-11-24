@@ -964,6 +964,177 @@ function toggleAbstract(abstractId) {
     }
 }
 
+// Research Profiles Section
+function displayResearchProfiles() {
+    const container = document.getElementById('research-profiles');
+    
+    // Your research profile data
+    const profiles = {
+        googleScholar: {
+            name: 'Google Scholar',
+            profileUrl: 'https://scholar.google.com/citations?hl=en&user=LHEiuS4AAAAJ', // Replace with actual ID
+            icon: '🎓',
+            stats: [
+                { label: 'Citations', value: '6'},
+                { label: 'h-index', value: '1'},
+                { label: 'i10-index', value: '0'}
+            ]
+        },
+        researchGate: {
+            name: 'ResearchGate',
+            profileUrl: 'https://www.researchgate.net/profile/Griffin-Goodwin-2?ev=hdr_xprf', // Replace with actual profile
+            icon: '🔬',
+            stats: [
+                { label: 'Research Interest Score', value: '6.5'},
+            ]
+        },
+        orcid: {
+            name: 'ORCID',
+            profileUrl: 'https://orcid.org/0000-0003-3493-9174', // Replace with actual ORCID
+            icon: '🆔',
+            stats: [
+                { label: 'Profile ID', value: '0000-0003-3493-9174'}
+            ]
+        }
+    };
+    
+    container.innerHTML = `
+        <div class="research-profiles-grid">
+            ${Object.entries(profiles).map(([key, profile]) => `
+                <div class="research-profile-card">
+                    <div class="profile-header">
+                        <span class="profile-icon">${profile.icon}</span>
+                        <h3>${profile.name}</h3>
+                    </div>
+                    <div class="profile-stats">
+                        ${profile.stats.map(stat => `
+                            <div class="profile-stat">
+                                <div class="stat-value">${stat.value}</div>
+                                <div class="stat-label">${stat.label}</div>
+                                ${stat.note ? `<div class="stat-note">${stat.note}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <a href="${profile.profileUrl}" target="_blank" class="profile-link">
+                        View Profile →
+                    </a>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// Enhanced GitHub Stats
+async function fetchEnhancedGitHubStats() {
+    const username = 'griffin-goodwin';
+    const container = document.getElementById('github-stats');
+    
+    try {
+        // Fetch user profile and repos
+        const [userResponse, reposResponse] = await Promise.all([
+            fetch(`https://api.github.com/users/${username}`),
+            fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=100`)
+        ]);
+        
+        if (!userResponse.ok || !reposResponse.ok) {
+            throw new Error('Failed to fetch GitHub data');
+        }
+        
+        const user = await userResponse.json();
+        const repos = await reposResponse.json();
+        
+        // Calculate enhanced stats
+        const totalRepos = repos.length;
+        const publicRepos = repos.filter(r => !r.private).length;
+        const totalStars = repos.reduce((sum, repo) => sum + repo.stargazers_count, 0);
+        const totalForks = repos.reduce((sum, repo) => sum + repo.forks_count, 0);
+        const totalSize = repos.reduce((sum, repo) => sum + repo.size, 0);
+        
+        // Calculate language distribution
+        const languageCounts = {};
+        repos.forEach(repo => {
+            if (repo.language) {
+                languageCounts[repo.language] = (languageCounts[repo.language] || 0) + 1;
+            }
+        });
+        
+        const topLanguages = Object.entries(languageCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        // Find most starred repo
+        const mostStarred = repos.reduce((max, repo) => 
+            repo.stargazers_count > (max?.stargazers_count || 0) ? repo : max, null);
+        
+        // Display enhanced stats
+        displayEnhancedGitHubStats(container, {
+            followers: user.followers,
+            following: user.following,
+            totalRepos,
+            publicRepos,
+            totalStars,
+            totalForks,
+            totalSize,
+            topLanguages,
+            mostStarred,
+            profileUrl: user.html_url
+        });
+        
+    } catch (error) {
+        console.error('Error fetching enhanced GitHub stats:', error);
+        container.innerHTML = `
+            <div class="stats-error">
+                <p>Unable to load GitHub statistics. <a href="https://github.com/${username}" target="_blank">View on GitHub →</a></p>
+            </div>
+        `;
+    }
+}
+
+function displayEnhancedGitHubStats(container, stats) {
+    const languageHTML = stats.topLanguages.map(([lang, count]) => 
+        `<span class="language-badge">${lang} (${count})</span>`
+    ).join('');
+    
+    container.innerHTML = `
+        <div class="stats-card enhanced-stats">
+            <div class="stat-item">
+                <div class="stat-value">${stats.totalRepos}</div>
+                <div class="stat-label">Repositories</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.totalStars}</div>
+                <div class="stat-label">Total Stars</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.totalForks}</div>
+                <div class="stat-label">Total Forks</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.followers}</div>
+                <div class="stat-label">Followers</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${(stats.totalSize / 1024).toFixed(1)}MB</div>
+                <div class="stat-label">Code Size</div>
+            </div>
+            ${stats.mostStarred ? `
+                <div class="stat-item featured-repo">
+                    <div class="stat-value">⭐ ${stats.mostStarred.stargazers_count}</div>
+                    <div class="stat-label">Most Starred</div>
+                    <div class="stat-note">${stats.mostStarred.name}</div>
+                </div>
+            ` : ''}
+            <div class="stat-item languages">
+                <div class="stat-label">Top Languages</div>
+                <div class="language-badges">${languageHTML}</div>
+            </div>
+        </div>
+        <div class="github-profile-link">
+            <a href="${stats.profileUrl}" target="_blank" class="profile-link">View Full GitHub Profile →</a>
+        </div>
+    `;
+}
+
 // Observe project cards for animation
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize PDF.js worker if available
@@ -971,7 +1142,13 @@ document.addEventListener('DOMContentLoaded', () => {
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
     
-    // Load GitHub repos immediately
+    // Load research profiles
+    displayResearchProfiles();
+    
+    // Load enhanced GitHub stats
+    fetchEnhancedGitHubStats();
+    
+    // Load GitHub repos
     fetchGitHubRepos();
     
     // Load papers - will work even if PDF.js fails
